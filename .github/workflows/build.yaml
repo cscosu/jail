@@ -7,16 +7,17 @@ on:
       - v*
   pull_request:
 jobs:
-  build:
+  push-ghcr:
+    name: Build and push image
     runs-on: ubuntu-22.04
+    permissions:
+      packages: write
+      id-token: write
+      contents: read
     steps:
-      - uses: docker/setup-qemu-action@v2.2.0
-        with:
-          image: tonistiigi/binfmt:qemu-v6.2.0
-          platforms: arm64
-      - uses: docker/setup-buildx-action@v2.9.0
-        with:
-          driver-opts: image=moby/buildkit
+      - name: Checkout
+        uses: actions/checkout@v3
+
       - uses: docker/metadata-action@v4.6.0
         id: meta
         with:
@@ -26,17 +27,24 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-      - uses: docker/login-action@v2.2.0
-        if: github.event_name != 'pull_request'
+
+      - name: Build image
+        id: build
+        uses: redhat-actions/buildah-build@v2
         with:
-          registry: ghcr.io
+          layers: true
+          containerfiles: |
+            ./Dockerfile
+          image: jail
+          tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Push to ghcr
+        if: ${{ github.event_name == 'push' }}
+        uses: redhat-actions/push-to-registry@v2
+        id: push
+        with:
+          image: ${{ steps.build.outputs.image }}
+          tags: ${{ steps.build.outputs.tags }}
+          registry: ghcr.io/${{ github.repository_owner }}
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      - uses: docker/build-push-action@v4.1.1
-        with:
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          platforms: linux/amd64,linux/arm64
-          provenance: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
