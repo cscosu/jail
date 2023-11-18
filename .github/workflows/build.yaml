@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    permissions:
+      packages: write
+      id-token: write
+      contents: read
     steps:
       - uses: docker/setup-qemu-action@v3
         with:
